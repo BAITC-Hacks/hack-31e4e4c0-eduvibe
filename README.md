@@ -156,4 +156,4 @@ docker compose logs --tail=100 backend
 
 Команда: **Dexarim** — backend, AI, БД, Docker и интеграция; **B_l_a_c_kS_u_n** — frontend и интерфейс.
 
-Кейс предоставлен AI Sana; данные созданы командой. До старта были подготовлены контекстные шаблоны документации. Визуальный референс — предоставленное командой видео `2176ba1ef89e12c95fdfcf99e615f302.mp4`; его ассеты в продукт не включены. При разработке использовался OpenAI Codex. Сторонние библиотеки и версии зафиксированы в [requirements.txt](backend/requirements.txt) и [package-lock.json](frontend/package-lock.json); инфраструктура использует Docker и MySQL.
+Кейс предоставлен AI Sana; данные созданы командой. До старта были подготовлены контекстные шаблоны документации. При разработке использовался OpenAI Codex. Сторонние библиотеки и версии зафиксированы в [requirements.txt](backend/requirements.txt) и [package-lock.json](frontend/package-lock.json); инфраструктура использует Docker и MySQL.
