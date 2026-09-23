@@ -75,6 +75,8 @@ def test_full_business_flow(client):
     published = client.post(f"/api/v1/tasks/{task_id}/publish")
     assert published.status_code == 200
     assert published.json()["is_published"] is True
+    locked_edit = client.patch(f"/api/v1/tasks/{task_id}", json={"card": card})
+    assert locked_edit.status_code == 409
 
     catalog = client.get("/api/v1/tasks", params={"topic": "образ", "readiness_level": "priority"})
     assert catalog.status_code == 200
