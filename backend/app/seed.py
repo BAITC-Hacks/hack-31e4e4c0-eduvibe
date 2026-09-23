@@ -130,5 +130,16 @@ def seed() -> None:
             db.commit()
 
 
+        # Пять отдельных черновиков нужны для проверки роста готовности по ТЗ.
+        for index, item in enumerate(TASKS, start=1):
+            draft_id = f"demo-draft-{index}"
+            if db.get(Task, draft_id) is None:
+                card = item["card"].model_dump()
+                db.add(Task(id=draft_id, topic=item["topic"], description=item["description"],
+                            card=card, questions=[], answers=[], readiness=calculate_readiness(card),
+                            owner_id="business-demo", is_confirmed=False, is_published=False))
+        db.commit()
+
+
 if __name__ == "__main__":
     seed()

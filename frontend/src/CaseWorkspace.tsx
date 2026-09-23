@@ -35,11 +35,15 @@ export function BusinessWorkspace({
   const [tab, setTab] = useState(0)
   const [answers, setAnswers] = useState<Record<string, string>>({})
   const [card, setCard] = useState<Card>(emptyCard)
+  const [topic, setTopic] = useState(task.topic)
+  const [description, setDescription] = useState(task.description)
   const [proposals, setProposals] = useState<Proposal[]>([])
 
   useEffect(() => {
     let active = true
     setCard(task.card)
+    setTopic(task.topic)
+    setDescription(task.description)
     setAnswers(Object.fromEntries(task.answers.map((item) => [item.question_id, item.text])))
     api
       .proposals(task.id)
@@ -56,9 +60,8 @@ export function BusinessWorkspace({
   )
   const hasUnsavedCard = (Object.keys(card) as (keyof Card)[]).some((key) => card[key] !== task.card[key])
   const hasUnsavedAnswers =
-    !task.answers.length &&
     task.questions.some((question) => (answers[question.id] || '') !== (savedAnswers[question.id] || ''))
-  const hasUnsaved = hasUnsavedCard || hasUnsavedAnswers
+  const hasUnsaved = hasUnsavedCard || hasUnsavedAnswers || topic !== task.topic || description !== task.description
 
   const update = async (next: Task) => {
     onTask(next)
@@ -92,7 +95,7 @@ export function BusinessWorkspace({
           <span className="eyebrow">МОЙ КЕЙС / {task.topic.toUpperCase()}</span>
           <h2>{card.title || 'Новый рабочий кейс'}</h2>
           <small>
-            {task.is_published ? 'Опубликован и зафиксирован' : task.is_confirmed ? 'Подтверждён' : 'Черновик'} ·
+            {task.is_published ? task.is_confirmed ? 'Опубликован' : 'Публикация ожидает подтверждения правок' : task.is_confirmed ? 'Подтверждён' : 'Черновик'} ·
             ID {task.id.slice(0, 8)} · владелец {actor.name}
           </small>
         </div>
@@ -152,6 +155,10 @@ export function BusinessWorkspace({
             task={task}
             card={card}
             setCard={setCard}
+            topic={topic}
+            setTopic={setTopic}
+            description={description}
+            setDescription={setDescription}
             busy={busy}
             action={action}
             update={update}
@@ -185,6 +192,10 @@ function CaseMap({
   task,
   card,
   setCard,
+  topic,
+  setTopic,
+  description,
+  setDescription,
   busy,
   action,
   update,
@@ -193,6 +204,10 @@ function CaseMap({
   task: Task
   card: Card
   setCard: (card: Card) => void
+  topic: string
+  setTopic: (topic: string) => void
+  description: string
+  setDescription: (description: string) => void
   busy: boolean
   action: AsyncAction
   update: (task: Task) => Promise<void>
@@ -203,7 +218,8 @@ function CaseMap({
   const section = caseSections.find((item) => item.id === sectionId)
   const filled = (key: keyof Card) => Boolean(task.card[key].trim())
   const completed = caseSections.filter((item) => item.fields.every(filled)).length
-  const dirty = (Object.keys(card) as (keyof Card)[]).some((key) => card[key] !== task.card[key])
+  const dirty = (Object.keys(card) as (keyof Card)[]).some((key) => card[key] !== task.card[key]) || topic !== task.topic || description !== task.description
+  const valid = topic.trim().length >= 2 && description.trim().length >= 10 && Boolean(card.title.trim())
 
   const chooseSection = (id: string) => {
     const next = caseSections.find((item) => item.id === id)!
@@ -217,7 +233,7 @@ function CaseMap({
         <div className="case-progress glass-panel">
           <div>
             <b>{completed} из 3 смысловых блоков заполнено</b>
-            <small>Навигационный прогресс не заменяет официальный индекс готовности backend.</small>
+            <small>Баллы готовности и объяснение каждого показателя — ниже карты.</small>
           </div>
           <div className="case-progress-track" aria-label={`Заполнено ${completed} из 3 блоков`}>
             <i style={{ width: `${(completed / 3) * 100}%` }} />
@@ -235,7 +251,7 @@ function CaseMap({
         <div className="case-canvas glass-panel" aria-label="Карта полей кейса">
           <div className="canvas-heading">
             <p className="canvas-hint">Выберите блок или сохранённый узел. Редактор откроется справа.</p>
-            <span>{task.is_published ? 'READ ONLY' : dirty ? 'UNSAVED SIGNAL' : 'SYNCED'}</span>
+            <span>{dirty ? 'НЕ СОХРАНЕНО' : task.is_confirmed ? 'ПОДТВЕРЖДЕНО' : 'ЧЕРНОВИК'}</span>
           </div>
           <button
             className={`case-root ${sectionId === null ? 'selected' : ''}`}
@@ -308,12 +324,14 @@ function CaseMap({
           </span>
           <span className={levelClass(task.readiness.level)}>{task.readiness.level_label}</span>
           {task.readiness.missing_information.length > 0 && (
-            <small>Следующие пробелы: {task.readiness.missing_information.slice(0, 3).join(' · ')}</small>
+            <small>Следующие пробелы: {task.readiness.missing_information.join(' · ')}</small>
           )}
         </div>
+        <ReadinessScore readiness={task.readiness} confirmed={task.is_confirmed && !dirty} />
       </div>
 
       <aside className="case-inspector glass-panel">
+        {task.is_published && <p className="published-note">Студенты видят последнюю подтверждённую версию. После сохранения подтвердите правки, чтобы обновить публикацию.</p>}
         {section ? (
           <>
             <span className="eyebrow">РЕДАКТОР / {section.title.toUpperCase()}</span>
@@ -335,13 +353,12 @@ function CaseMap({
                 rows={8}
                 value={card[field]}
                 maxLength={fieldLimits[field]}
-                disabled={task.is_published}
                 onChange={(event) => setCard({ ...card, [field]: event.target.value })}
                 placeholder={`Опишите: ${labels[field].toLowerCase()}`}
               />
               <small>
                 {card[field].length}/{fieldLimits[field]} ·{' '}
-                {task.is_published ? 'Редактирование закрыто' : dirty ? 'Есть несохранённые изменения' : 'Синхронизировано'}
+                {dirty ? 'Есть несохранённые изменения' : 'Сохранено'}
               </small>
             </label>
           </>
@@ -349,14 +366,13 @@ function CaseMap({
           <>
             <span className="eyebrow">ОСНОВА КЕЙСА</span>
             <h3>Название и исходный сигнал</h3>
-            <p>Тема: {task.topic}</p>
-            <div className="source-summary">{task.description}</div>
+            <label className="inspector-field"><span>Тема</span><input value={topic} minLength={2} maxLength={120} onChange={event => setTopic(event.target.value)} /></label>
+            <label className="inspector-field"><span>Исходное описание</span><textarea rows={4} value={description} minLength={10} maxLength={5000} onChange={event => setDescription(event.target.value)} /></label>
             <label className="inspector-field">
               <span>Название кейса</span>
               <input
                 value={card.title}
                 maxLength={fieldLimits.title}
-                disabled={task.is_published}
                 onChange={(event) => setCard({ ...card, title: event.target.value })}
                 placeholder="Короткое название"
               />
@@ -370,18 +386,18 @@ function CaseMap({
         <div className="inspector-actions">
           <button
             className="primary"
-            disabled={busy || !dirty || task.is_published}
-            onClick={() => action(async () => update(await api.updateCard(task.id, card)))}
+            disabled={busy || !dirty || !valid}
+            onClick={() => action(async () => update(await api.updateCard(task.id, card, topic, description)))}
           >
             Сохранить и пересчитать
           </button>
           {!task.is_confirmed ? (
             <button
               className="secondary"
-              disabled={busy || dirty}
+              disabled={busy || dirty || !valid}
               onClick={() => action(async () => update(await api.confirm(task.id)))}
             >
-              Подтвердить текущую версию
+              {task.is_published ? 'Подтвердить и обновить публикацию' : 'Подтвердить текущую версию'}
             </button>
           ) : !task.is_published ? (
             <button
@@ -409,7 +425,7 @@ function CaseMap({
   )
 }
 
-export function ReadinessScore({ readiness }: { readiness: Readiness }) {
+export function ReadinessScore({ readiness, confirmed = true }: { readiness: Readiness; confirmed?: boolean }) {
   return (
     <aside className="score glass-panel">
       <div className="score-orbit">
@@ -419,7 +435,8 @@ export function ReadinessScore({ readiness }: { readiness: Readiness }) {
           <small>/100</small>
         </strong>
       </div>
-      <span className="eyebrow">ИНДЕКС ГОТОВНОСТИ</span>
+      <span className="eyebrow">{confirmed ? 'ПОДТВЕРЖДЁННАЯ ГОТОВНОСТЬ' : 'ПРЕДВАРИТЕЛЬНАЯ ГОТОВНОСТЬ'}</span>
+      {!confirmed && <p className="published-note">Предварительный расчёт по сохранённым полям. Баллы фиксируются после подтверждения.</p>}
       <div className="bar">
         <i style={{ width: `${readiness.total}%` }} />
       </div>
@@ -440,14 +457,14 @@ export function ReadinessScore({ readiness }: { readiness: Readiness }) {
           <b>!</b>
           <span>
             <strong>Не хватает данных</strong>
-            {readiness.missing_information.slice(0, 3).join(' · ')}
+            {readiness.missing_information.join(' · ')}
           </span>
         </div>
       )}
       {readiness.suggestions.length > 0 && (
         <div className="score-suggestions">
           <span className="eyebrow">КАК УСИЛИТЬ КЕЙС</span>
-          {readiness.suggestions.slice(0, 3).map((suggestion) => (
+          {readiness.suggestions.map((suggestion) => (
             <p key={suggestion}>↗ {suggestion}</p>
           ))}
         </div>
@@ -502,10 +519,10 @@ function Clarifications({
               onClick={() =>
                 action(async () => {
                   const result = await api.clarify(task.id)
-                  await update({ ...task, questions: result.questions, ai_mode: result.ai_mode })
+                  await update({ ...task, questions: result.questions, ai_mode: result.ai_mode, answers: [] })
                 })
               }
-              disabled={busy || task.is_published}
+              disabled={busy}
             >
               Сформировать вопросы →
             </button>
@@ -522,13 +539,11 @@ function Clarifications({
               </span>
             </div>
             {task.ai_mode === 'fallback' && (
-              <div className="fallback-note">Использован явно обозначенный резервный режим без внешнего AI-вызова.</div>
+              <div className="fallback-note">Эти вопросы созданы резервным шаблонным режимом. Ответ модели не был получен или не прошёл проверку. Можно повторить запрос.</div>
             )}
-            {(task.is_published || answersApplied) && (
+            {answersApplied && (
               <div className="readonly-note">
-                {task.is_published
-                  ? 'Опубликованный кейс доступен только для чтения.'
-                  : 'Ответы уже перенесены в карту. Дальнейшие правки выполняются в редакторе полей.'}
+                Ответы перенесены в карту. Можно исправить их и сохранить заново; окончательный текст подтверждаете вы.
               </div>
             )}
             {task.questions.map((question, index) => (
@@ -539,23 +554,27 @@ function Clarifications({
                   <small>{labels[question.field as keyof Card] || question.field}</small>
                   <textarea
                     rows={3}
-                    maxLength={3000}
+                    maxLength={Math.min(fieldLimits[question.field as keyof Card] || 3000, 3000)}
                     value={answers[question.id] || ''}
-                    disabled={task.is_published || answersApplied}
                     onChange={(event) => setAnswers({ ...answers, [question.id]: event.target.value })}
                     placeholder="Введите содержательный ответ…"
                   />
                 </span>
               </label>
             ))}
-            {answersApplied ? (
+            {answersApplied && (
               <button className="secondary" onClick={goMap}>
                 Открыть заполненную карту →
               </button>
-            ) : (
+            )}
+            <button className="secondary" disabled={busy} onClick={() => action(async () => {
+              const result = await api.clarify(task.id)
+              await update({ ...task, ...result, answers: [] })
+            })}>Обновить уточняющие вопросы</button>
+            {(
               <button
                 className="primary"
-                disabled={busy || task.is_published || !canSave}
+                disabled={busy || !canSave}
                 onClick={() =>
                   action(async () =>
                     update(
@@ -579,7 +598,7 @@ function Clarifications({
           </div>
         )}
       </div>
-      <ReadinessScore readiness={task.readiness} />
+      <ReadinessScore readiness={task.readiness} confirmed={task.is_confirmed} />
     </div>
   )
 }
@@ -654,6 +673,7 @@ function BusinessCollab({
           <h3>{proposals.length ? `${proposals.length} откликов на орбите` : 'Откликов пока нет'}</h3>
           <p>Только бизнес-владелец кейса выбирает, отклоняет или оставляет команды на рассмотрении.</p>
         </div>
+        <button className="secondary" onClick={() => action(async () => setProposals(await api.proposals(task.id)))}>Обновить отклики</button>
       </div>
 
       {proposals.length ? (
@@ -709,7 +729,7 @@ function BusinessCollab({
                   </div>
                   {proposal.status === 'selected' && !proposal.milestone_confirmed && (
                     <button className="secondary milestone-btn" onClick={() => setMilestone(proposal)}>
-                      Подтвердить milestone
+                      Подтвердить этап
                     </button>
                   )}
                   {proposal.milestone_confirmed && (
@@ -724,7 +744,7 @@ function BusinessCollab({
         <div className="empty glass-panel compact-empty">
           <div className="locked-node">○</div>
           <h3>Кейс уже виден студентам</h3>
-          <p>Новые отклики появятся здесь автоматически после отправки командами.</p>
+          <p>После отправки предложения командой нажмите «Обновить отклики».</p>
         </div>
       )}
 
@@ -737,6 +757,7 @@ function BusinessCollab({
           <button className="primary" onClick={saveDecision}>
             Зафиксировать ручное решение →
           </button>
+          <button className="secondary" onClick={() => action(async () => setProposals(await api.decide(task.id, [], proposals.map(item => item.id))))}>Отклонить все</button>
         </div>
       )}
 

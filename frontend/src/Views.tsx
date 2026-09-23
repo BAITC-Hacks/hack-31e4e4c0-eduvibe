@@ -88,7 +88,7 @@ export function NewTaskScreen({
           <span>Условия</span>
         </div>
         <p>
-          Каждый узел — реальное поле API. Незаполненные сведения остаются пустыми: AI не добавляет факты за
+          Каждый узел — раздел вашего ТЗ. Незаполненные сведения остаются пустыми: AI не добавляет факты за
           пользователя.
         </p>
       </div>
@@ -139,7 +139,7 @@ export function MyTasksView({
               <h3>{task.card.title || task.topic}</h3>
               <p>{task.card.context || task.description}</p>
               <small>
-                {task.is_published ? 'Опубликован' : task.is_confirmed ? 'Подтверждён' : 'Черновик'} · обновлён{' '}
+                {task.is_published ? task.is_confirmed ? 'Опубликован' : 'Правки ждут подтверждения' : task.is_confirmed ? 'Подтверждён' : 'Черновик'} · обновлён{' '}
                 {new Date(task.updated_at).toLocaleDateString('ru-RU')}
               </small>
             </div>
@@ -149,7 +149,7 @@ export function MyTasksView({
               </button>
               {confirmDelete === task.id ? (
                 <div className="delete-confirm">
-                  <small>Удалить без восстановления?</small>
+                  <small>Скрыть кейс? История откликов сохранится.</small>
                   <button
                     className="danger"
                     onClick={() => {
@@ -310,6 +310,7 @@ export function TaskDetails({
   back: () => void
 }) {
   const existing = actor.role === 'student' ? myProposals.find((item) => item.task_id === task.id) : undefined
+  const [another, setAnother] = useState(false)
   const [form, setForm] = useState({ idea: '', plan: '', duration_days: 14, prototype_url: '' })
   const canSubmit =
     form.idea.trim().length >= 10 &&
@@ -367,20 +368,23 @@ export function TaskDetails({
 
       {actor.role === 'student' && (
         <div className="student-response glass-panel">
-          {existing ? (
-            <ProposalStatus proposal={existing} />
+          {existing && !another ? (
+            <>
+              <ProposalStatus proposal={existing} />
+              <button className="secondary" onClick={() => setAnother(true)}>Отправить ещё одно предложение</button>
+            </>
           ) : (
             <>
               <div className="section">
                 <div>
                   <span className="eyebrow">ОТКЛИК / {actor.name.toUpperCase()}</span>
                   <h3>Предложить решение</h3>
-                  <p>Команда определяется текущей сессией. Чужой профиль выбрать нельзя.</p>
+                  <p>Предложение от вашей команды видит только владелец кейса. Другим студентам оно недоступно.</p>
                 </div>
               </div>
               <div className="response-form">
                 <label>
-                  ИДЕЯ РЕШЕНИЯ
+                  ИДЕЯ И ПРИМЕР РЕШЕНИЯ
                   <textarea
                     rows={4}
                     maxLength={4000}
@@ -416,6 +420,7 @@ export function TaskDetails({
                     ССЫЛКА НА ПРОТОТИП
                     <input
                       type="url"
+                      maxLength={500}
                       value={form.prototype_url}
                       onChange={(event) => setForm({ ...form, prototype_url: event.target.value })}
                       placeholder="https://example.com/prototype"
@@ -429,6 +434,8 @@ export function TaskDetails({
                     action(async () => {
                       const proposal = await api.createProposal(task.id, form)
                       onProposal(proposal)
+                      setAnother(false)
+                      setForm({ idea: '', plan: '', duration_days: 14, prototype_url: '' })
                     })
                   }
                 >
@@ -459,7 +466,8 @@ function ProposalStatus({ proposal }: { proposal: Proposal }) {
         <summary>План команды</summary>
         <p>{proposal.plan}</p>
       </details>
-      {proposal.milestone_confirmed && <span className="milestone-complete">✓ Бизнес подтвердил milestone</span>}
+      <small>{proposal.duration_days} дней · <a href={proposal.prototype_url} target="_blank" rel="noreferrer">Прототип ↗</a></small>
+      {proposal.milestone_confirmed && <span className="milestone-complete">✓ Бизнес подтвердил этап · {proposal.team.progress_points} баллов команды</span>}
     </div>
   )
 }
@@ -467,9 +475,11 @@ function ProposalStatus({ proposal }: { proposal: Proposal }) {
 export function MyProposalsView({
   proposals,
   openTask,
+  refresh,
 }: {
   proposals: Proposal[]
   openTask: (id: string) => void
+  refresh: () => void
 }) {
   return (
     <section>
@@ -480,6 +490,7 @@ export function MyProposalsView({
           </span>
           <h2>Мои отклики</h2>
           <p>История предложений текущей команды и решения бизнеса.</p>
+          <button className="secondary" onClick={refresh}>Обновить статусы</button>
         </div>
         <span className="catalog-counter">
           <b>{proposals.length}</b>
@@ -497,10 +508,11 @@ export function MyProposalsView({
                     ? 'Отклонена'
                     : 'На рассмотрении'}
               </span>
-              {proposal.milestone_confirmed && <span className="milestone-complete">✓ milestone</span>}
+              {proposal.milestone_confirmed && <span className="milestone-complete">✓ Этап подтверждён · {proposal.team.progress_points} баллов</span>}
             </div>
             <h3>{proposal.task_title || 'Удалённая задача'}</h3>
             <p>{proposal.idea}</p>
+            <details><summary>План и прототип</summary><p>{proposal.plan}</p><a href={proposal.prototype_url} target="_blank" rel="noreferrer">Прототип ↗</a></details>
             <small>
               {proposal.duration_days} дней · {new Date(proposal.created_at).toLocaleDateString('ru-RU')}
             </small>

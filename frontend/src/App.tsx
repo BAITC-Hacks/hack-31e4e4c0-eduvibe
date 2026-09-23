@@ -101,7 +101,7 @@ export default function App() {
           const tasks = await api.myTasks()
           if (!active) return
           setMyTasks(tasks)
-          setPage((current) => (current === 'catalog' || current === 'teams' ? current : 'myTasks'))
+          setPage('myTasks')
         } else {
           const [tasks, proposals] = await Promise.all([api.catalog(), api.myProposals()])
           if (!active) return
@@ -139,6 +139,7 @@ export default function App() {
     })
 
   const refreshTeams = async () => setTeams(await api.teams())
+  const refreshProposals = () => action(async () => setMyProposals(await api.myProposals()))
 
   const searchCatalog = (filters?: { topic?: string; readiness_level?: string }) =>
     action(async () => setCatalog(await api.catalog(filters)))
@@ -239,27 +240,27 @@ export default function App() {
         <nav aria-label="Основная навигация">
           {actor.role === 'business' ? (
             <>
-              <button className={page === 'myTasks' ? 'active' : ''} onClick={() => setPage('myTasks')}>
+              <button disabled={busy} className={page === 'myTasks' ? 'active' : ''} onClick={() => { setPage('myTasks'); void action(async () => setMyTasks(await api.myTasks())) }}>
                 <i>◫</i> Мои кейсы
               </button>
-              <button className={page === 'workspace' && !task ? 'active' : ''} onClick={openNewTask}>
+              <button disabled={busy} className={page === 'workspace' && !task ? 'active' : ''} onClick={openNewTask}>
                 <i>＋</i> Новый кейс
               </button>
-              <button className={page === 'catalog' ? 'active' : ''} onClick={showCatalog}>
+              <button disabled={busy} className={page === 'catalog' ? 'active' : ''} onClick={showCatalog}>
                 <i>⌁</i> Общий каталог
               </button>
             </>
           ) : (
             <>
-              <button className={page === 'catalog' ? 'active' : ''} onClick={showCatalog}>
+              <button disabled={busy} className={page === 'catalog' ? 'active' : ''} onClick={showCatalog}>
                 <i>⌁</i> Каталог задач
               </button>
-              <button className={page === 'myProposals' ? 'active' : ''} onClick={() => setPage('myProposals')}>
+              <button disabled={busy} className={page === 'myProposals' ? 'active' : ''} onClick={() => { setPage('myProposals'); refreshProposals() }}>
                 <i>↗</i> Мои отклики
               </button>
             </>
           )}
-          <button className={page === 'teams' ? 'active' : ''} onClick={() => setPage('teams')}>
+          <button disabled={busy} className={page === 'teams' ? 'active' : ''} onClick={() => { setPage('teams'); void action(refreshTeams) }}>
             <i>◉</i> Команды
           </button>
         </nav>
@@ -278,7 +279,7 @@ export default function App() {
         <footer>
           <span className={connection === 'online' ? 'online' : `online ${connection}`} />
           {connection === 'online' ? 'API И БАЗА В СЕТИ' : 'API НЕДОСТУПЕН'}
-          <small>session protected / v2</small>
+          <small>Демонстрационная сессия / v2</small>
         </footer>
       </aside>
 
@@ -294,7 +295,7 @@ export default function App() {
               <small>{actor.role === 'business' ? 'Представитель бизнеса' : 'Студенческая команда'}</small>
             </span>
             <span className="avatar">{initials}</span>
-            <button className="logout-button" onClick={logout}>
+            <button className="logout-button" disabled={busy} onClick={logout}>
               Выйти
             </button>
           </div>
@@ -318,11 +319,11 @@ export default function App() {
           </div>
         )}
 
-        <div className={`page-transition page-${page}`} key={page}>
+        <fieldset disabled={busy} className={`page-transition page-content page-${page}`} key={page}>
           {page === 'myTasks' && actor.role === 'business' ? (
             <MyTasksView tasks={myTasks} open={openTask} create={openNewTask} remove={removeTask} />
           ) : page === 'myProposals' && actor.role === 'student' ? (
-            <MyProposalsView proposals={myProposals} openTask={openTask} />
+            <MyProposalsView proposals={myProposals} openTask={openTask} refresh={refreshProposals} />
           ) : page === 'catalog' ? (
             <CatalogView role={actor.role} tasks={catalog} busy={busy} open={openTask} search={searchCatalog} />
           ) : page === 'teams' ? (
@@ -330,6 +331,7 @@ export default function App() {
           ) : actor.role === 'business' ? (
             task && task.owner_id === actor.profile_id ? (
               <BusinessWorkspace
+                key={task.id}
                 actor={actor}
                 task={task}
                 busy={busy}
@@ -341,6 +343,7 @@ export default function App() {
               />
             ) : task ? (
               <TaskDetails
+                key={task.id}
                 actor={actor}
                 task={task}
                 myProposals={[]}
@@ -353,6 +356,7 @@ export default function App() {
             )
           ) : task ? (
             <TaskDetails
+              key={task.id}
               actor={actor}
               task={task}
               myProposals={myProposals}
@@ -363,7 +367,7 @@ export default function App() {
           ) : (
             <CatalogView role={actor.role} tasks={catalog} busy={busy} open={openTask} search={searchCatalog} />
           )}
-        </div>
+        </fieldset>
       </main>
     </div>
   )
@@ -429,7 +433,7 @@ function LoginScreen({
         </div>
         <span className="eyebrow">ДЕМО-ВХОД</span>
         <h2>Выберите свою роль</h2>
-        <p>Регистрация не требуется: backend выдаёт временную сессию для выбранного демонстрационного профиля.</p>
+        <p>Выберите тестовый профиль. Это демонстрация без проверки личности: доступно переключение между всеми профилями.</p>
 
         {error && (
           <div className="error auth-error" role="alert">
@@ -478,7 +482,7 @@ function LoginScreen({
         >
           Войти как {selectedProfile?.name || (role === 'business' ? 'бизнес' : 'команда')} →
         </button>
-        <small className="auth-hint">Токен хранится только до закрытия вкладки браузера.</small>
+        <small className="auth-hint">Для реальных пользователей потребуется вход с проверкой личности.</small>
       </div>
     </div>
   )

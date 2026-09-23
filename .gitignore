@@ -1,39 +1,51 @@
-# Локальное окружение и секреты
+# Секреты и локальная конфигурация
 .env
 .env.*
 !.env.example
 
-# Виртуальные окружения Python
+# Зависимости, сборка и тестовые артефакты
 .venv/
 .venv-*/
 venv/
 env/
 ENV/
-
-# Python bytecode и кэши
+node_modules/
+dist/
 __pycache__/
 *.py[cod]
-*$py.class
+*.db
+*.sqlite*
+*.tsbuildinfo
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
-.pyre/
-.hypothesis/
-.tox/
-.nox/
+.coverage
+htmlcov/
+playwright-report/
+test-results/
+*.log
 
-# IDE и файлы операционной системы
+# Настройки редактора
 .idea/
 .vscode/
 *.swp
 *.swo
+.DS_Store
 
-# Agentes Ruls
-.venv-codex/
-*.db
-    
-
-node_modules/
-dist/
-models/all_*.glb
-tests/legacy/
+# Локальные инструкции и материалы подготовки — сохранены на компьютере, не входят в релиз
+/AGENTS.md
+/API_CONTRACT.md
+/DAY_OF_PROMPT.md
+/DESIGN.md
+/FINAL_CHECKLIST.md
+/HACKATHON_RULES.md
+/PREEXISTING_MATERIALS.md
+/PROGRESS.md
+/README copy.md
+/README_TEMPLATE.md
+/TASKS.md
+/TASK_BRIEF.md
+/docs/
+/backend/backend-AGENTS.md
+/frontend/frontend-AGENTS.md
+/frontend/README.md

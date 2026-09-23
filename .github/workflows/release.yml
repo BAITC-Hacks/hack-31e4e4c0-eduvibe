@@ -1,0 +1,17 @@
+name: Публикация релиза
+on:
+  push:
+    tags:
+      - 'v2.*'
+permissions:
+  contents: write
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Создать релиз из проверенного тега
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --verify-tag --title "EduVibe $GITHUB_REF_NAME" --notes "Интегрированный frontend v2 и backend: кабинеты бизнеса и студентов, AI-уточнения, прозрачный рейтинг, открытый каталог и приватные отклики. Запуск, соответствие ТЗ, проверки и ограничения описаны в README."

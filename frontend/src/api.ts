@@ -1,4 +1,4 @@
-export const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1'
+export const API_URL = import.meta.env.VITE_API_URL || '/api/v1'
 
 const TOKEN_KEY = 'eduvibe_demo_token'
 
@@ -181,8 +181,8 @@ export const api = {
       method: 'PUT',
       body: JSON.stringify({ answers }),
     }),
-  updateCard: (id: string, card: Card) =>
-    request<Task>(`/tasks/${id}`, { method: 'PATCH', body: JSON.stringify({ card }) }),
+  updateCard: (id: string, card: Card, topic?: string, description?: string) =>
+    request<Task>(`/tasks/${id}`, { method: 'PATCH', body: JSON.stringify({ card, topic, description }) }),
   confirm: (id: string) => request<Task>(`/tasks/${id}/confirm`, { method: 'POST' }),
   publish: (id: string) => request<Task>(`/tasks/${id}/publish`, { method: 'POST' }),
 
