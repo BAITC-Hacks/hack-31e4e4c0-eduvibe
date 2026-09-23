@@ -31,3 +31,9 @@ __pycache__/
 # Agentes Ruls
 .venv-codex/
 *.db
+    
+
+node_modules/
+dist/
+models/all_*.glb
+tests/legacy/
