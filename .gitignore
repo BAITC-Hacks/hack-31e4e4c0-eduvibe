@@ -1,0 +1,39 @@
+# Локальное окружение и секреты
+.env
+.env.*
+!.env.example
+
+# Виртуальные окружения Python
+.venv/
+.venv-*/
+venv/
+env/
+ENV/
+
+# Python bytecode и кэши
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.pyre/
+.hypothesis/
+.tox/
+.nox/
+
+# IDE и файлы операционной системы
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Agentes Ruls
+.venv-codex/
+*.db
+    
+
+node_modules/
+dist/
+models/all_*.glb
+tests/legacy/
