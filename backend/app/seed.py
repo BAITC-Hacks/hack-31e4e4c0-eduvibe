@@ -84,14 +84,16 @@ TASKS = [
 
 def seed() -> None:
     with SessionLocal() as db:
-        if db.scalar(select(func.count()).select_from(Team)) == 0:
-            db.add_all(
-                [
-                    Team(name=name, interests=interests, skills=skills, technologies=technologies)
-                    for name, interests, skills, technologies in TEAMS
-                ]
-            )
-            db.commit()
+        # Дополняем набор, сохраняя существующие профили и их баллы.
+        existing_names = set(db.scalars(select(Team.name)))
+        db.add_all(
+            [
+                Team(name=name, interests=interests, skills=skills, technologies=technologies)
+                for name, interests, skills, technologies in TEAMS
+                if name not in existing_names
+            ]
+        )
+        db.commit()
 
         if db.scalar(select(func.count()).select_from(Task)) == 0:
             tasks: list[Task] = []
