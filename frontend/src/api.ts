@@ -1,0 +1,16 @@
+export const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1'
+export type Card = { title:string; context:string; need:string; users:string; data_materials:string; constraints:string; expected_result:string; success_criteria:string; contact:string; interaction_format:string }
+export type Readiness = { total:number; level:'draft'|'working'|'ready'|'priority'; level_label:string; breakdown:{field:string;label:string;points:number;max_points:number;hint?:string|null}[]; missing_information:string[]; suggestions:string[] }
+export type Question = { id:string; field:string; text:string }
+export type Task = { id:string; description:string; topic:string; card:Card; questions:Question[]; answers:{question_id:string;field:string;text:string}[]; readiness:Readiness; is_confirmed:boolean; is_published:boolean; ai_mode:string|null; created_at:string; updated_at:string }
+export type Team = { id:string; name:string; interests:string[]; skills:string[]; technologies:string[]; progress_points:number }
+export type Proposal = { id:string; task_id:string; team_id:string; team:Team; idea:string; plan:string; duration_days:number; prototype_url:string; status:'pending'|'selected'|'rejected'; created_at:string }
+export type Milestone = { id:string; proposal_id:string; result:string; points:number; confirmed_at:string; team_progress_points:number }
+async function request<T>(path:string, init?:RequestInit):Promise<T>{let response:Response;try{response=await fetch(`${API_URL}${path}`,{headers:{'Content-Type':'application/json',...(init?.headers||{})},...init})}catch{throw new Error('Backend недоступен. Запустите API на localhost:8000.')}const body=await response.json().catch(()=>null);if(!response.ok)throw new Error(body?.error?.message||'Проверьте введённые данные.');return body as T}
+export const api={
+ createTask:(p:{description:string;topic:string})=>request<Task>('/tasks',{method:'POST',body:JSON.stringify(p)}),
+ getTask:(id:string)=>request<Task>(`/tasks/${id}`), clarify:(id:string)=>request<{questions:Question[];ai_mode:string}>(`/tasks/${id}/clarifications`,{method:'POST'}),
+ saveAnswers:(id:string,a:{question_id:string;field:string;text:string}[])=>request<Task>(`/tasks/${id}/answers`,{method:'PUT',body:JSON.stringify({answers:a})}), updateCard:(id:string,c:Card)=>request<Task>(`/tasks/${id}`,{method:'PATCH',body:JSON.stringify({card:c})}), confirm:(id:string)=>request<Task>(`/tasks/${id}/confirm`,{method:'POST'}), publish:(id:string)=>request<Task>(`/tasks/${id}/publish`,{method:'POST'}),
+ catalog:()=>request<Task[]>('/tasks'), teams:()=>request<Team[]>('/teams'), proposals:(id:string)=>request<Proposal[]>(`/tasks/${id}/proposals`),
+ createProposal:(id:string,p:{team_id:string;idea:string;plan:string;duration_days:number;prototype_url:string})=>request<Proposal>(`/tasks/${id}/proposals`,{method:'POST',body:JSON.stringify(p)}), decide:(id:string,s:string[],r:string[])=>request<Proposal[]>(`/tasks/${id}/decision`,{method:'PUT',body:JSON.stringify({selected_proposal_ids:s,rejected_proposal_ids:r})}), milestone:(id:string,p:{result:string;points:number})=>request<Milestone>(`/proposals/${id}/milestone`,{method:'PUT',body:JSON.stringify(p)})
+}
