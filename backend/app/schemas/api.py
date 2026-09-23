@@ -19,7 +19,7 @@ CARD_FIELDS = (
 
 class Card(BaseModel):
     title: str = Field(default="", max_length=200)
-    context: str = Field(default="", max_length=3000)
+    context: str = Field(default="", max_length=5000)
     need: str = Field(default="", max_length=3000)
     users: str = Field(default="", max_length=2000)
     data_materials: str = Field(default="", max_length=3000)
@@ -62,13 +62,14 @@ class TaskCreate(BaseModel):
     description: str = Field(min_length=10, max_length=5000)
     topic: str = Field(min_length=2, max_length=120)
 
-    @field_validator("description", "topic")
+    @field_validator("description", "topic", mode="before")
     @classmethod
-    def strip_required(cls, value: str) -> str:
-        return value.strip()
+    def strip_required(cls, value: object) -> object:
+        return value.strip() if isinstance(value, str) else value
 
 
 class Answer(BaseModel):
+    model_config = ConfigDict(str_strip_whitespace=True)
     question_id: str = Field(min_length=1, max_length=100)
     field: str
     text: str = Field(min_length=1, max_length=3000)
@@ -87,10 +88,14 @@ class AnswersUpdate(BaseModel):
 
 class TaskPatch(BaseModel):
     card: Card
+    topic: str | None = Field(default=None, min_length=2, max_length=120)
+    description: str | None = Field(default=None, min_length=10, max_length=5000)
+    model_config = ConfigDict(str_strip_whitespace=True)
 
 
 class TaskResponse(BaseModel):
     id: str
+    owner_id: str
     description: str
     topic: str
     card: Card
@@ -123,15 +128,18 @@ class TeamResponse(BaseModel):
 
 
 class ProposalCreate(BaseModel):
-    team_id: str
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
     idea: str = Field(min_length=10, max_length=4000)
     plan: str = Field(min_length=10, max_length=4000)
     duration_days: int = Field(ge=1, le=365)
-    prototype_url: HttpUrl
+    prototype_url: HttpUrl = Field(max_length=500)
 
 
 class ProposalResponse(BaseModel):
     id: str
+    task_title: str
+    task_deleted: bool
+    milestone_confirmed: bool
     task_id: str
     team_id: str
     team: TeamResponse
@@ -151,6 +159,7 @@ class DecisionUpdate(BaseModel):
 
 
 class MilestoneCreate(BaseModel):
+    model_config = ConfigDict(str_strip_whitespace=True)
     result: str = Field(min_length=10, max_length=4000)
     points: int = Field(default=10, ge=1, le=100)
 
@@ -172,3 +181,8 @@ class ErrorBody(BaseModel):
 
 class ErrorResponse(BaseModel):
     error: ErrorBody
+
+
+class SessionCreate(BaseModel):
+    role: Literal["business", "student"]
+    profile_id: str = Field(min_length=1, max_length=36)

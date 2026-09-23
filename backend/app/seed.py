@@ -107,6 +107,9 @@ def seed() -> None:
                     is_confirmed=True,
                     is_published=True,
                     ai_mode=None,
+                    owner_id="business-demo",
+                    published_snapshot={"card": card, "readiness": calculate_readiness(card),
+                                        "topic": item["topic"], "description": item["description"]},
                 )
                 db.add(task)
                 tasks.append(task)

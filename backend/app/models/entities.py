@@ -18,6 +18,9 @@ class Task(Base):
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     description: Mapped[str] = mapped_column(Text)
     topic: Mapped[str] = mapped_column(String(120), index=True)
+    owner_id: Mapped[str] = mapped_column(String(36), default="business-demo", index=True)
+    is_deleted: Mapped[bool] = mapped_column(Boolean, default=False)
+    published_snapshot: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
     card: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
     questions: Mapped[list[dict[str, Any]]] = mapped_column(JSON, default=list)
     answers: Mapped[list[dict[str, Any]]] = mapped_column(JSON, default=list)
@@ -44,6 +47,15 @@ class Team(Base):
     proposals: Mapped[list["Proposal"]] = relationship(back_populates="team")
 
 
+class UserSession(Base):
+    __tablename__ = "user_sessions"
+
+    token_hash: Mapped[str] = mapped_column(String(64), primary_key=True)
+    role: Mapped[str] = mapped_column(String(20))
+    profile_id: Mapped[str] = mapped_column(String(36))
+    expires_at: Mapped[datetime] = mapped_column(DateTime)
+
+
 class Proposal(Base):
     __tablename__ = "proposals"
 
@@ -60,6 +72,19 @@ class Proposal(Base):
     task: Mapped[Task] = relationship(back_populates="proposals")
     team: Mapped[Team] = relationship(back_populates="proposals")
     milestone: Mapped["Milestone | None"] = relationship(back_populates="proposal", uselist=False)
+
+    @property
+    def task_title(self) -> str:
+        snapshot = self.task.published_snapshot or {}
+        return snapshot.get("card", self.task.card).get("title", "Задача")
+
+    @property
+    def task_deleted(self) -> bool:
+        return self.task.is_deleted
+
+    @property
+    def milestone_confirmed(self) -> bool:
+        return self.milestone is not None
 
 
 class Milestone(Base):

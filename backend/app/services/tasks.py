@@ -1,4 +1,4 @@
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.orm import Session, selectinload
 
 from app.core.errors import AppError
@@ -12,6 +12,7 @@ from app.schemas.api import (
     TaskCreate,
 )
 from app.services.rating import calculate_readiness
+from app.services.access import Actor, require_owner
 
 
 def empty_card(topic: str, description: str) -> dict[str, str]:
@@ -20,15 +21,16 @@ def empty_card(topic: str, description: str) -> dict[str, str]:
 
 def get_task(db: Session, task_id: str) -> Task:
     task = db.get(Task, task_id)
-    if task is None:
+    if task is None or task.is_deleted:
         raise AppError("TASK_NOT_FOUND", "Задача не найдена.", 404)
     return task
 
 
-def create_task(db: Session, payload: TaskCreate) -> Task:
+def create_task(db: Session, payload: TaskCreate, owner_id: str) -> Task:
     card = empty_card(payload.topic, payload.description)
     task = Task(
         description=payload.description,
+        owner_id=owner_id,
         topic=payload.topic,
         card=card,
         questions=[],
@@ -42,11 +44,10 @@ def create_task(db: Session, payload: TaskCreate) -> Task:
 
 
 def save_answers(db: Session, task: Task, payload: AnswersUpdate) -> Task:
-    if task.is_published:
-        raise AppError("TASK_ALREADY_PUBLISHED", "Опубликованную карточку нельзя изменять.", 409)
     known_questions = {item["id"]: item["field"] for item in task.questions}
     card = Card.model_validate(task.card).model_dump()
-    answers: list[dict[str, str]] = []
+    answers = {item["question_id"]: item for item in task.answers}
+    seen_fields: set[str] = set()
 
     for answer in payload.answers:
         expected_field = known_questions.get(answer.question_id)
@@ -56,15 +57,18 @@ def save_answers(db: Session, task: Task, payload: AnswersUpdate) -> Task:
                 "Ответ не соответствует вопросу этой задачи.",
                 422,
             )
-        text = answer.text.strip()
-        if card[answer.field]:
-            card[answer.field] = f"{card[answer.field]}\n{text}"
-        else:
-            card[answer.field] = text
-        answers.append(answer.model_dump())
+        if answer.field in seen_fields:
+            raise AppError("INVALID_ANSWER", "Передайте один ответ на каждое поле.", 422)
+        seen_fields.add(answer.field)
+        card[answer.field] = answer.text.strip()
+        answers[answer.question_id] = answer.model_dump()
 
-    task.card = card
-    task.answers = answers
+    from pydantic import ValidationError
+    try:
+        task.card = Card.model_validate(card).model_dump()
+    except ValidationError as exc:
+        raise AppError("INVALID_ANSWER", "Ответ слишком длинный для выбранного поля карточки.", 422) from exc
+    task.answers = list(answers.values())
     task.readiness = calculate_readiness(card)
     task.is_confirmed = False
     db.commit()
@@ -72,10 +76,13 @@ def save_answers(db: Session, task: Task, payload: AnswersUpdate) -> Task:
     return task
 
 
-def update_card(db: Session, task: Task, card: Card) -> Task:
-    if task.is_published:
-        raise AppError("TASK_ALREADY_PUBLISHED", "Опубликованную карточку нельзя изменять.", 409)
+def update_card(db: Session, task: Task, card: Card, topic: str | None = None,
+                description: str | None = None) -> Task:
     task.card = card.model_dump()
+    if topic is not None:
+        task.topic = topic
+    if description is not None:
+        task.description = description
     task.readiness = calculate_readiness(card)
     task.is_confirmed = False
     db.commit()
@@ -84,8 +91,12 @@ def update_card(db: Session, task: Task, card: Card) -> Task:
 
 
 def confirm_task(db: Session, task: Task) -> Task:
+    if not task.card.get("title", "").strip():
+        raise AppError("TITLE_REQUIRED", "Добавьте название кейса перед подтверждением.", 422)
     task.readiness = calculate_readiness(task.card)
     task.is_confirmed = True
+    if task.is_published:
+        task.published_snapshot = snapshot(task)
     db.commit()
     db.refresh(task)
     return task
@@ -99,25 +110,50 @@ def publish_task(db: Session, task: Task) -> Task:
             409,
         )
     task.is_published = True
+    task.published_snapshot = snapshot(task)
     db.commit()
     db.refresh(task)
     return task
 
 
-def list_catalog(db: Session, topic: str | None, readiness_level: str | None) -> list[Task]:
-    tasks = list(db.scalars(select(Task).where(Task.is_published.is_(True))).all())
+def snapshot(task: Task) -> dict:
+    return {"card": dict(task.card), "readiness": dict(task.readiness),
+            "topic": task.topic, "description": task.description}
+
+
+def public_task(task: Task) -> dict:
+    return {"id": task.id, "owner_id": task.owner_id, **(task.published_snapshot or snapshot(task)),
+            "questions": [], "answers": [], "ai_mode": None, "is_confirmed": True,
+            "is_published": True, "created_at": task.created_at, "updated_at": task.updated_at}
+
+
+def owned_task(db: Session, task_id: str, actor: Actor) -> Task:
+    task = get_task(db, task_id)
+    require_owner(actor, task)
+    return task
+
+
+def delete_task(db: Session, task: Task) -> None:
+    task.is_deleted = True
+    task.is_published = False
+    db.commit()
+
+
+def list_catalog(db: Session, topic: str | None, readiness_level: str | None) -> list[dict]:
+    tasks = [public_task(task) for task in db.scalars(select(Task).where(
+        Task.is_published.is_(True), Task.is_deleted.is_(False))).all()]
     if topic:
         normalized = topic.casefold()
-        tasks = [task for task in tasks if normalized in task.topic.casefold()]
+        tasks = [task for task in tasks if normalized in task["topic"].casefold()]
     if readiness_level:
-        tasks = [task for task in tasks if task.readiness.get("level") == readiness_level]
-    return sorted(tasks, key=lambda task: (task.readiness.get("total", 0), task.updated_at), reverse=True)
+        tasks = [task for task in tasks if task["readiness"].get("level") == readiness_level]
+    return sorted(tasks, key=lambda task: (task["readiness"].get("total", 0), task["id"]), reverse=True)
 
 
-def create_proposal(db: Session, task: Task, payload: ProposalCreate) -> Proposal:
+def create_proposal(db: Session, task: Task, payload: ProposalCreate, team_id: str) -> Proposal:
     if not task.is_published:
         raise AppError("TASK_NOT_PUBLISHED", "Отклик можно отправить только на опубликованную задачу.", 409)
-    team = db.get(Team, payload.team_id)
+    team = db.get(Team, team_id)
     if team is None:
         raise AppError("TEAM_NOT_FOUND", "Профиль команды не найден.", 404)
     proposal = Proposal(
@@ -179,6 +215,7 @@ def save_decision(db: Session, task: Task, payload: DecisionUpdate) -> list[Prop
 
 
 def confirm_milestone(db: Session, proposal: Proposal, payload: MilestoneCreate) -> Milestone:
+    db.scalar(select(Proposal).where(Proposal.id == proposal.id).with_for_update())
     if proposal.status != "selected":
         raise AppError("PROPOSAL_NOT_SELECTED", "Этап можно подтвердить только для выбранной команды.", 409)
     if proposal.milestone is not None:
@@ -189,7 +226,8 @@ def confirm_milestone(db: Session, proposal: Proposal, payload: MilestoneCreate)
         result=payload.result.strip(),
         points=payload.points,
     )
-    proposal.team.progress_points += payload.points
+    db.execute(update(Team).where(Team.id == proposal.team_id).values(
+        progress_points=Team.progress_points + payload.points))
     db.add(milestone)
     db.commit()
     db.refresh(milestone)

@@ -27,6 +27,7 @@ def clean_database():
                 technologies=["React", "FastAPI"],
             )
         )
+        db.add(Team(id="team-other", name="Другая команда", interests=[], skills=[], technologies=[]))
         db.commit()
     yield
     Base.metadata.drop_all(bind=engine)
