@@ -138,7 +138,7 @@ def get_teams(db: Session = Depends(get_db), actor: Actor = Depends(current_acto
 
 @router.post("/tasks/{task_id}/proposals", response_model=ProposalResponse, status_code=201)
 def post_proposal(task_id: str, payload: ProposalCreate, db: Session = Depends(get_db),
-                  actor: Actor = Depends(current_actor)) -> Proposal:
+                actor: Actor = Depends(current_actor)) -> Proposal:
     require_role(actor, "student")
     return create_proposal(db, get_task(db, task_id), payload, actor.profile_id)
 
@@ -147,7 +147,7 @@ def post_proposal(task_id: str, payload: ProposalCreate, db: Session = Depends(g
 def my_proposals(db: Session = Depends(get_db), actor: Actor = Depends(current_actor)) -> list[Proposal]:
     require_role(actor, "student")
     return list(db.scalars(select(Proposal).where(Proposal.team_id == actor.profile_id)
-                           .order_by(Proposal.created_at.desc())))
+                        .order_by(Proposal.created_at.desc())))
 
 
 @router.get("/tasks/{task_id}/proposals", response_model=list[ProposalResponse])
