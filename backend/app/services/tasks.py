@@ -42,6 +42,8 @@ def create_task(db: Session, payload: TaskCreate) -> Task:
 
 
 def save_answers(db: Session, task: Task, payload: AnswersUpdate) -> Task:
+    if task.is_published:
+        raise AppError("TASK_ALREADY_PUBLISHED", "Опубликованную карточку нельзя изменять.", 409)
     known_questions = {item["id"]: item["field"] for item in task.questions}
     card = Card.model_validate(task.card).model_dump()
     answers: list[dict[str, str]] = []
@@ -71,6 +73,8 @@ def save_answers(db: Session, task: Task, payload: AnswersUpdate) -> Task:
 
 
 def update_card(db: Session, task: Task, card: Card) -> Task:
+    if task.is_published:
+        raise AppError("TASK_ALREADY_PUBLISHED", "Опубликованную карточку нельзя изменять.", 409)
     task.card = card.model_dump()
     task.readiness = calculate_readiness(card)
     task.is_confirmed = False
